@@ -1,0 +1,752 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="GB2312"/>
+    <title>report.html</title>
+    <style>body {
+  font-family: Helvetica, Arial, sans-serif;
+  font-size: 12px;
+  /* do not increase min-width as some may use split screens */
+  min-width: 800px;
+  color: #999;
+}
+
+h1 {
+  font-size: 24px;
+  color: black;
+}
+
+h2 {
+  font-size: 16px;
+  color: black;
+}
+
+p {
+  color: black;
+}
+
+a {
+  color: #999;
+}
+
+table {
+  border-collapse: collapse;
+}
+
+/******************************
+ * SUMMARY INFORMATION
+ ******************************/
+#environment td {
+  padding: 5px;
+  border: 1px solid #E6E6E6;
+}
+#environment tr:nth-child(odd) {
+  background-color: #f6f6f6;
+}
+
+/******************************
+ * TEST RESULT COLORS
+ ******************************/
+span.passed,
+.passed .col-result {
+  color: green;
+}
+
+span.skipped,
+span.xfailed,
+span.rerun,
+.skipped .col-result,
+.xfailed .col-result,
+.rerun .col-result {
+  color: orange;
+}
+
+span.error,
+span.failed,
+span.xpassed,
+.error .col-result,
+.failed .col-result,
+.xpassed .col-result {
+  color: red;
+}
+
+/******************************
+ * RESULTS TABLE
+ *
+ * 1. Table Layout
+ * 2. Extra
+ * 3. Sorting items
+ *
+ ******************************/
+/*------------------
+ * 1. Table Layout
+ *------------------*/
+#results-table {
+  border: 1px solid #e6e6e6;
+  color: #999;
+  font-size: 12px;
+  width: 100%;
+}
+#results-table th,
+#results-table td {
+  padding: 5px;
+  border: 1px solid #E6E6E6;
+  text-align: left;
+}
+#results-table th {
+  font-weight: bold;
+}
+
+/*------------------
+ * 2. Extra
+ *------------------*/
+.log {
+  background-color: #e6e6e6;
+  border: 1px solid #e6e6e6;
+  color: black;
+  display: block;
+  font-family: "Courier New", Courier, monospace;
+  height: 230px;
+  overflow-y: scroll;
+  padding: 5px;
+  white-space: pre-wrap;
+}
+.log:only-child {
+  height: inherit;
+}
+
+div.image {
+  border: 1px solid #e6e6e6;
+  float: right;
+  height: 240px;
+  margin-left: 5px;
+  overflow: hidden;
+  width: 320px;
+}
+div.image img {
+  width: 320px;
+}
+
+div.video {
+  border: 1px solid #e6e6e6;
+  float: right;
+  height: 240px;
+  margin-left: 5px;
+  overflow: hidden;
+  width: 320px;
+}
+div.video video {
+  overflow: hidden;
+  width: 320px;
+  height: 240px;
+}
+
+.collapsed {
+  display: none;
+}
+
+.expander::after {
+  content: " (show details)";
+  color: #BBB;
+  font-style: italic;
+  cursor: pointer;
+}
+
+.collapser::after {
+  content: " (hide details)";
+  color: #BBB;
+  font-style: italic;
+  cursor: pointer;
+}
+
+/*------------------
+ * 3. Sorting items
+ *------------------*/
+.sortable {
+  cursor: pointer;
+}
+
+.sort-icon {
+  font-size: 0px;
+  float: left;
+  margin-right: 5px;
+  margin-top: 5px;
+  /*triangle*/
+  width: 0;
+  height: 0;
+  border-left: 8px solid transparent;
+  border-right: 8px solid transparent;
+}
+.inactive .sort-icon {
+  /*finish triangle*/
+  border-top: 8px solid #E6E6E6;
+}
+.asc.active .sort-icon {
+  /*finish triangle*/
+  border-bottom: 8px solid #999;
+}
+.desc.active .sort-icon {
+  /*finish triangle*/
+  border-top: 8px solid #999;
+}
+</style></head>
+  <body onLoad="init()">
+    <script>/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this file,
+ * You can obtain one at http://mozilla.org/MPL/2.0/. */
+
+
+function toArray(iter) {
+    if (iter === null) {
+        return null;
+    }
+    return Array.prototype.slice.call(iter);
+}
+
+function find(selector, elem) { // eslint-disable-line no-redeclare
+    if (!elem) {
+        elem = document;
+    }
+    return elem.querySelector(selector);
+}
+
+function findAll(selector, elem) {
+    if (!elem) {
+        elem = document;
+    }
+    return toArray(elem.querySelectorAll(selector));
+}
+
+function sortColumn(elem) {
+    toggleSortStates(elem);
+    const colIndex = toArray(elem.parentNode.childNodes).indexOf(elem);
+    let key;
+    if (elem.classList.contains('result')) {
+        key = keyResult;
+    } else if (elem.classList.contains('links')) {
+        key = keyLink;
+    } else {
+        key = keyAlpha;
+    }
+    sortTable(elem, key(colIndex));
+}
+
+function showAllExtras() { // eslint-disable-line no-unused-vars
+    findAll('.col-result').forEach(showExtras);
+}
+
+function hideAllExtras() { // eslint-disable-line no-unused-vars
+    findAll('.col-result').forEach(hideExtras);
+}
+
+function showExtras(colresultElem) {
+    const extras = colresultElem.parentNode.nextElementSibling;
+    const expandcollapse = colresultElem.firstElementChild;
+    extras.classList.remove('collapsed');
+    expandcollapse.classList.remove('expander');
+    expandcollapse.classList.add('collapser');
+}
+
+function hideExtras(colresultElem) {
+    const extras = colresultElem.parentNode.nextElementSibling;
+    const expandcollapse = colresultElem.firstElementChild;
+    extras.classList.add('collapsed');
+    expandcollapse.classList.remove('collapser');
+    expandcollapse.classList.add('expander');
+}
+
+function showFilters() {
+    let visibleString = getQueryParameter('visible') || 'all';
+    visibleString = visibleString.toLowerCase();
+    const checkedItems = visibleString.split(',');
+
+    const filterItems = document.getElementsByClassName('filter');
+    for (let i = 0; i < filterItems.length; i++) {
+        filterItems[i].hidden = false;
+
+        if (visibleString != 'all') {
+            filterItems[i].checked = checkedItems.includes(filterItems[i].getAttribute('data-test-result'));
+            filterTable(filterItems[i]);
+        }
+    }
+}
+
+function addCollapse() {
+    // Add links for show/hide all
+    const resulttable = find('table#results-table');
+    const showhideall = document.createElement('p');
+    showhideall.innerHTML = '<a href="javascript:showAllExtras()">Show all details</a> / ' +
+                            '<a href="javascript:hideAllExtras()">Hide all details</a>';
+    resulttable.parentElement.insertBefore(showhideall, resulttable);
+
+    // Add show/hide link to each result
+    findAll('.col-result').forEach(function(elem) {
+        const collapsed = getQueryParameter('collapsed') || 'Passed';
+        const extras = elem.parentNode.nextElementSibling;
+        const expandcollapse = document.createElement('span');
+        if (extras.classList.contains('collapsed')) {
+            expandcollapse.classList.add('expander');
+        } else if (collapsed.includes(elem.innerHTML)) {
+            extras.classList.add('collapsed');
+            expandcollapse.classList.add('expander');
+        } else {
+            expandcollapse.classList.add('collapser');
+        }
+        elem.appendChild(expandcollapse);
+
+        elem.addEventListener('click', function(event) {
+            if (event.currentTarget.parentNode.nextElementSibling.classList.contains('collapsed')) {
+                showExtras(event.currentTarget);
+            } else {
+                hideExtras(event.currentTarget);
+            }
+        });
+    });
+}
+
+function getQueryParameter(name) {
+    const match = RegExp('[?&]' + name + '=([^&]*)').exec(window.location.search);
+    return match && decodeURIComponent(match[1].replace(/\+/g, ' '));
+}
+
+function init () { // eslint-disable-line no-unused-vars
+    resetSortHeaders();
+
+    addCollapse();
+
+    showFilters();
+
+    sortColumn(find('.initial-sort'));
+
+    findAll('.sortable').forEach(function(elem) {
+        elem.addEventListener('click',
+            function() {
+                sortColumn(elem);
+            }, false);
+    });
+}
+
+function sortTable(clicked, keyFunc) {
+    const rows = findAll('.results-table-row');
+    const reversed = !clicked.classList.contains('asc');
+    const sortedRows = sort(rows, keyFunc, reversed);
+    /* Whole table is removed here because browsers acts much slower
+     * when appending existing elements.
+     */
+    const thead = document.getElementById('results-table-head');
+    document.getElementById('results-table').remove();
+    const parent = document.createElement('table');
+    parent.id = 'results-table';
+    parent.appendChild(thead);
+    sortedRows.forEach(function(elem) {
+        parent.appendChild(elem);
+    });
+    document.getElementsByTagName('BODY')[0].appendChild(parent);
+}
+
+function sort(items, keyFunc, reversed) {
+    const sortArray = items.map(function(item, i) {
+        return [keyFunc(item), i];
+    });
+
+    sortArray.sort(function(a, b) {
+        const keyA = a[0];
+        const keyB = b[0];
+
+        if (keyA == keyB) return 0;
+
+        if (reversed) {
+            return keyA < keyB ? 1 : -1;
+        } else {
+            return keyA > keyB ? 1 : -1;
+        }
+    });
+
+    return sortArray.map(function(item) {
+        const index = item[1];
+        return items[index];
+    });
+}
+
+function keyAlpha(colIndex) {
+    return function(elem) {
+        return elem.childNodes[1].childNodes[colIndex].firstChild.data.toLowerCase();
+    };
+}
+
+function keyLink(colIndex) {
+    return function(elem) {
+        const dataCell = elem.childNodes[1].childNodes[colIndex].firstChild;
+        return dataCell == null ? '' : dataCell.innerText.toLowerCase();
+    };
+}
+
+function keyResult(colIndex) {
+    return function(elem) {
+        const strings = ['Error', 'Failed', 'Rerun', 'XFailed', 'XPassed',
+            'Skipped', 'Passed'];
+        return strings.indexOf(elem.childNodes[1].childNodes[colIndex].firstChild.data);
+    };
+}
+
+function resetSortHeaders() {
+    findAll('.sort-icon').forEach(function(elem) {
+        elem.parentNode.removeChild(elem);
+    });
+    findAll('.sortable').forEach(function(elem) {
+        const icon = document.createElement('div');
+        icon.className = 'sort-icon';
+        icon.textContent = 'vvv';
+        elem.insertBefore(icon, elem.firstChild);
+        elem.classList.remove('desc', 'active');
+        elem.classList.add('asc', 'inactive');
+    });
+}
+
+function toggleSortStates(elem) {
+    //if active, toggle between asc and desc
+    if (elem.classList.contains('active')) {
+        elem.classList.toggle('asc');
+        elem.classList.toggle('desc');
+    }
+
+    //if inactive, reset all other functions and add ascending active
+    if (elem.classList.contains('inactive')) {
+        resetSortHeaders();
+        elem.classList.remove('inactive');
+        elem.classList.add('active');
+    }
+}
+
+function isAllRowsHidden(value) {
+    return value.hidden == false;
+}
+
+function filterTable(elem) { // eslint-disable-line no-unused-vars
+    const outcomeAtt = 'data-test-result';
+    const outcome = elem.getAttribute(outcomeAtt);
+    const classOutcome = outcome + ' results-table-row';
+    const outcomeRows = document.getElementsByClassName(classOutcome);
+
+    for(let i = 0; i < outcomeRows.length; i++){
+        outcomeRows[i].hidden = !elem.checked;
+    }
+
+    const rows = findAll('.results-table-row').filter(isAllRowsHidden);
+    const allRowsHidden = rows.length == 0 ? true : false;
+    const notFoundMessage = document.getElementById('not-found-message');
+    notFoundMessage.hidden = !allRowsHidden;
+}
+</script>
+    <h1>report.html</h1>
+    <p>Report generated on 10-Jul-2023 at 15:48:16 by <a href="https://pypi.python.org/pypi/pytest-html">pytest-html</a> v3.2.0</p>
+    <h2>Summary</h2>
+    <p>4 tests ran in 390.71 seconds. </p>
+    <p class="filter" hidden="true">(Un)check the boxes to filter the results.</p><input checked="true" class="filter" data-test-result="passed" hidden="true" name="filter_checkbox" onChange="filterTable(this)" type="checkbox"/><span class="passed">4 passed</span>, <input checked="true" class="filter" data-test-result="skipped" disabled="true" hidden="true" name="filter_checkbox" onChange="filterTable(this)" type="checkbox"/><span class="skipped">0 skipped</span>, <input checked="true" class="filter" data-test-result="failed" disabled="true" hidden="true" name="filter_checkbox" onChange="filterTable(this)" type="checkbox"/><span class="failed">0 failed</span>, <input checked="true" class="filter" data-test-result="error" disabled="true" hidden="true" name="filter_checkbox" onChange="filterTable(this)" type="checkbox"/><span class="error">0 errors</span>, <input checked="true" class="filter" data-test-result="xfailed" disabled="true" hidden="true" name="filter_checkbox" onChange="filterTable(this)" type="checkbox"/><span class="xfailed">0 expected failures</span>, <input checked="true" class="filter" data-test-result="xpassed" disabled="true" hidden="true" name="filter_checkbox" onChange="filterTable(this)" type="checkbox"/><span class="xpassed">0 unexpected passes</span>
+    <h2>Results</h2>
+    <table id="results-table">
+      <thead id="results-table-head">
+        <tr>
+          <th class="sortable result initial-sort" col="result">Result</th>
+          <th class="sortable" col="name">Test</th>
+          <th class="sortable" col="duration">Duration</th>
+          <th class="sortable links" col="links">Links</th></tr>
+        <tr hidden="true" id="not-found-message">
+          <th colspan="4">No results found. Try to check the filters</th></tr></thead>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">test_cases/test_submit_order.py::Test_submit_order::test_submit_xinan_order</td>
+          <td class="col-duration">71.63</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log"> -----------------------------Captured stdout setup------------------------------ <br/>
+ *** 初始化-模块 ***
+<br/> ------------------------------Captured stdout call------------------------------ <br/>      销售人员  代码  风险等级         备注 业务类型  ... 销售省份 地区/营业部(仅供参考)   销售部门  IC联系人  邮箱
+0  李辛羽、刘昊阳 NaN   NaN  auto-test   定制  ...  NaN          NaN  固定收益部    NaN NaN
+
+[1 rows x 30 columns]
+
+一键登录
+账号登录
+账号登录
+登陆后获取的cookie [{&#x27;domain&#x27;: &#x27;eappuat.cicc.group&#x27;, &#x27;httpOnly&#x27;: False, &#x27;name&#x27;: &#x27;org.springframework.web.servlet.i18n.CookieLocaleResolver.LOCALE&#x27;, &#x27;path&#x27;: &#x27;/&#x27;, &#x27;sameSite&#x27;: &#x27;None&#x27;, &#x27;secure&#x27;: True, &#x27;value&#x27;: &#x27;und&#x27;}, {&#x27;domain&#x27;: &#x27;eappuat.cicc.group&#x27;, &#x27;httpOnly&#x27;: True, &#x27;name&#x27;: &#x27;GWSID&#x27;, &#x27;path&#x27;: &#x27;/&#x27;, &#x27;sameSite&#x27;: &#x27;None&#x27;, &#x27;secure&#x27;: True, &#x27;value&#x27;: &#x27;s%3A-uRWb1NwE9vsi3kSKMyWqZk4bGCm5bqx.krZyDdWBHOL9lv03REAM9p9QYSdUrtzH684zJtPvoKI&#x27;}]
+尝试进入所选系统
+尝试进入所选系统的结果是OK
+尝试进入新建订单页面
+新建订单
+尝试进入新建订单页面的结果是
+销售人员                  李辛羽、刘昊阳
+代码                        NaN
+风险等级                      NaN
+备注                  auto-test
+业务类型                       定制
+产品名称              鑫安系列+鑫安0630
+交易日历                  上海证券交易所
+结算货币                      人民币
+募集起始日                     NaN
+募集结束日                     NaN
+客户打款日               2023/5/29
+成立日                 2023/6/29
+到期日                       NaN
+期限                         30
+认购方式                       线上
+散户募集起征点/元                 NaN
+计息基准                      NaN
+对客价                       2.5
+预计募集规模上限        60,000,000.00
+客户全称               中信证券股份有限公司
+资金账户                100030532
+新认购金额            8,000,000.00
+源自续期金额                      0
+续作标志                      NaN
+利息支付标志                    NaN
+销售省份                      NaN
+地区/营业部(仅供参考)              NaN
+销售部门                    固定收益部
+IC联系人                     NaN
+邮箱                        NaN
+Name: 0, dtype: object
+新建订单成功
+<br/></div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">test_cases/test_submit_order.py::Test_submit_order::test_submit_xintou_order</td>
+          <td class="col-duration">65.25</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log"> ------------------------------Captured stdout call------------------------------ <br/>      销售人员  代码  风险等级         备注 业务类型  ... 销售省份 地区/营业部(仅供参考)   销售部门 IC联系人  邮箱
+0  李辛羽、刘昊阳 NaN   NaN  auto-test   募集  ...  NaN          NaN  固定收益部   NaN NaN
+
+[1 rows x 30 columns]
+
+一键登录
+账号登录
+账号登录
+登陆后获取的cookie [{&#x27;domain&#x27;: &#x27;eappuat.cicc.group&#x27;, &#x27;httpOnly&#x27;: False, &#x27;name&#x27;: &#x27;org.springframework.web.servlet.i18n.CookieLocaleResolver.LOCALE&#x27;, &#x27;path&#x27;: &#x27;/&#x27;, &#x27;sameSite&#x27;: &#x27;None&#x27;, &#x27;secure&#x27;: True, &#x27;value&#x27;: &#x27;und&#x27;}, {&#x27;domain&#x27;: &#x27;eappuat.cicc.group&#x27;, &#x27;httpOnly&#x27;: True, &#x27;name&#x27;: &#x27;GWSID&#x27;, &#x27;path&#x27;: &#x27;/&#x27;, &#x27;sameSite&#x27;: &#x27;None&#x27;, &#x27;secure&#x27;: True, &#x27;value&#x27;: &#x27;s%3AGf6mb6mIP6FgM3HAK_8c1Xksoy5wuoai.LXKvNCPbespI22F2Dl2Fsj6kwNtPr72NkXutk5DVaOE&#x27;}]
+尝试进入所选系统
+尝试进入所选系统的结果是OK
+尝试进入新建订单页面
+新建订单
+尝试进入新建订单页面的结果是
+销售人员                  李辛羽、刘昊阳
+代码                        NaN
+风险等级                      NaN
+备注                  auto-test
+业务类型                       募集
+产品名称              鑫投系列+鑫投0516
+交易日历                  上海证券交易所
+结算货币                      人民币
+募集起始日               2023/5/31
+募集结束日                2023/6/1
+客户打款日                     NaN
+成立日                 2023/6/20
+到期日                       NaN
+期限                         30
+认购方式                       线上
+散户募集起征点/元              300000
+计息基准                      NaN
+对客价                       2.5
+预计募集规模上限        60,000,000.00
+客户全称                      NaN
+资金账户                      NaN
+新认购金额                     NaN
+源自续期金额                      0
+续作标志                      NaN
+利息支付标志                    NaN
+销售省份                      NaN
+地区/营业部(仅供参考)              NaN
+销售部门                    固定收益部
+IC联系人                     NaN
+邮箱                        NaN
+Name: 0, dtype: object
+新建订单成功
+<br/></div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">test_cases/test_submit_order.py::Test_submit_order::test_submit_changying_order</td>
+          <td class="col-duration">171.51</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log"> ------------------------------Captured stdout call------------------------------ <br/>      销售人员  代码  风险等级         备注 业务类型  ... 销售省份 地区/营业部(仅供参考)   销售部门 IC联系人  邮箱
+0  李辛羽、刘昊阳 NaN   NaN  auto-test   募集  ...  NaN          NaN  固定收益部   NaN NaN
+1  李辛羽、刘昊阳 NaN   NaN  auto-test   募集  ...  NaN          NaN  固定收益部   NaN NaN
+
+[2 rows x 47 columns]
+
+一键登录
+账号登录
+账号登录
+登陆后获取的cookie [{&#x27;domain&#x27;: &#x27;eappuat.cicc.group&#x27;, &#x27;httpOnly&#x27;: False, &#x27;name&#x27;: &#x27;org.springframework.web.servlet.i18n.CookieLocaleResolver.LOCALE&#x27;, &#x27;path&#x27;: &#x27;/&#x27;, &#x27;sameSite&#x27;: &#x27;None&#x27;, &#x27;secure&#x27;: True, &#x27;value&#x27;: &#x27;und&#x27;}, {&#x27;domain&#x27;: &#x27;eappuat.cicc.group&#x27;, &#x27;httpOnly&#x27;: True, &#x27;name&#x27;: &#x27;GWSID&#x27;, &#x27;path&#x27;: &#x27;/&#x27;, &#x27;sameSite&#x27;: &#x27;None&#x27;, &#x27;secure&#x27;: True, &#x27;value&#x27;: &#x27;s%3ANH7GW6VpSmoaIq-m_LO_S2c5zkXEr3F1.%2BRU9544sgmNuXohiEFXGPflEH4vqyksWt9qi039dUBk&#x27;}]
+尝试进入所选系统
+尝试进入所选系统的结果是OK
+尝试进入新建订单页面
+新建订单
+尝试进入新建订单页面的结果是
+销售人员                  李辛羽、刘昊阳
+代码                        NaN
+风险等级                      NaN
+备注                  auto-test
+业务类型                       募集
+产品名称              长赢系列+长赢0516
+交易日历                  上海证券交易所
+结算货币                      人民币
+募集起始日               2023/5/31
+募集结束日                2023/6/1
+客户打款日                     NaN
+成立日                  2023/6/2
+到期日                  2023/8/1
+期限                        NaN
+认购方式                       线上
+散户募集起征点/元              300000
+销售激励                      0.2
+期权结构                      鲨鱼鳍
+障碍类型                       单鲨
+行权方向                       看涨
+标的期初价格观察日            2023/6/5
+标的期末价格观察日            2024/6/1
+敲出观察频率                  到期日观察
+挂钩标的                中证小盘500指数
+是否年化收益率                     是
+计息基准                  ACT/365
+基准收益率                       4
+参与率                        38
+价格类型                 期初价格相对比例
+价格比较方式                     大于
+敲出价格                      115
+执行价格                      100
+敲出收益率                     4.9
+最低参考业绩比较基准                  4
+潜在最高参考业绩比较基准              9.7
+预计募集规模上限        60,000,000.00
+客户全称                      NaN
+资金账户                      NaN
+新认购金额                     NaN
+源自续期金额                      0
+续作标志                      NaN
+利息支付标志                    NaN
+销售省份                      NaN
+地区/营业部(仅供参考)              NaN
+销售部门                    固定收益部
+IC联系人                     NaN
+邮箱                        NaN
+Name: 0, dtype: object
+新建订单成功
+销售人员                  李辛羽、刘昊阳
+代码                        NaN
+风险等级                      NaN
+备注                  auto-test
+业务类型                       募集
+产品名称              长赢系列+长赢0516
+交易日历                  上海证券交易所
+结算货币                      人民币
+募集起始日               2023/5/31
+募集结束日                2023/6/1
+客户打款日                     NaN
+成立日                  2023/6/2
+到期日                 2023/6/29
+期限                        NaN
+认购方式                       线上
+散户募集起征点/元              300000
+销售激励                      0.2
+期权结构                      鲨鱼鳍
+障碍类型                       单鲨
+行权方向                       看跌
+标的期初价格观察日            2023/6/5
+标的期末价格观察日            2024/6/1
+敲出观察频率                   每日观察
+挂钩标的                中证小盘500指数
+是否年化收益率                     是
+计息基准                  ACT/365
+基准收益率                       4
+参与率                        38
+价格类型                 期初价格相对比例
+价格比较方式                     小于
+敲出价格                       85
+执行价格                      100
+敲出收益率                     4.9
+最低参考业绩比较基准                  4
+潜在最高参考业绩比较基准              9.7
+预计募集规模上限        60,000,000.00
+客户全称               中信证券股份有限公司
+资金账户              100030532.0
+新认购金额            8,000,000.00
+源自续期金额                      0
+续作标志                      NaN
+利息支付标志                    NaN
+销售省份                      NaN
+地区/营业部(仅供参考)              NaN
+销售部门                    固定收益部
+IC联系人                     NaN
+邮箱                        NaN
+Name: 1, dtype: object
+新建订单成功
+<br/></div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">test_cases/test_submit_order.py::Test_submit_order::test_submit_ruichi_order</td>
+          <td class="col-duration">81.45</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log"> ------------------------------Captured stdout call------------------------------ <br/>      销售人员  代码  风险等级         备注 业务类型  ... 销售省份 地区/营业部(仅供参考)   销售部门  IC联系人  邮箱
+0  李辛羽、刘昊阳 NaN   NaN  auto-test   定制  ...  NaN          NaN  固定收益部    NaN NaN
+
+[1 rows x 36 columns]
+
+一键登录
+账号登录
+账号登录
+登陆后获取的cookie [{&#x27;domain&#x27;: &#x27;eappuat.cicc.group&#x27;, &#x27;httpOnly&#x27;: False, &#x27;name&#x27;: &#x27;org.springframework.web.servlet.i18n.CookieLocaleResolver.LOCALE&#x27;, &#x27;path&#x27;: &#x27;/&#x27;, &#x27;sameSite&#x27;: &#x27;None&#x27;, &#x27;secure&#x27;: True, &#x27;value&#x27;: &#x27;und&#x27;}, {&#x27;domain&#x27;: &#x27;eappuat.cicc.group&#x27;, &#x27;httpOnly&#x27;: True, &#x27;name&#x27;: &#x27;GWSID&#x27;, &#x27;path&#x27;: &#x27;/&#x27;, &#x27;sameSite&#x27;: &#x27;None&#x27;, &#x27;secure&#x27;: True, &#x27;value&#x27;: &#x27;s%3A4xtzC0mSH-XPOAeIPwhlYYrA56i1bgge.Sem7aTR4hE%2FXaNvjBiYGUnj5r%2Fg4pfMINHV7SI9U8MQ&#x27;}]
+尝试进入所选系统
+尝试进入所选系统的结果是OK
+尝试进入新建订单页面
+新建订单
+尝试进入新建订单页面的结果是
+销售人员                   李辛羽、刘昊阳
+代码                         NaN
+风险等级                       NaN
+备注                   auto-test
+业务类型                        定制
+产品名称               瑞驰系列+瑞驰0516
+交易日历                   上海证券交易所
+结算货币                       人民币
+募集起始日                      NaN
+募集结束日                      NaN
+客户打款日                 2023/6/1
+成立日                   2023/6/2
+到期日                  2023/7/17
+期限                         NaN
+认购方式                        线上
+散户募集起征点/元               300000
+计息基准                       NaN
+业绩计提基准                       2
+认购费率                         1
+认购费用                       NaN
+基础投顾费率                       2
+销售部门分摊基础投顾费比例                1
+超额投顾费比例                      2
+销售部门分摊超额投顾费比例                1
+预计募集规模上限         60,000,000.00
+客户全称                中信证券股份有限公司
+资金账户                 100030532
+新认购金额            60,000,000.00
+源自续期金额                       0
+续作标志                       NaN
+利息支付标志                     NaN
+销售省份                       NaN
+地区/营业部(仅供参考)               NaN
+销售部门                     固定收益部
+IC联系人                      NaN
+邮箱                         NaN
+Name: 0, dtype: object
+新建订单成功
+<br/> ----------------------------Captured stdout teardown---------------------------- <br/>
+ ***   清除-模块 ***
+<br/></div></td></tr></tbody></table></body></html>

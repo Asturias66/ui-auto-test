@@ -1,0 +1,551 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="GB2312"/>
+    <title>report.html</title>
+    <style>body {
+  font-family: Helvetica, Arial, sans-serif;
+  font-size: 12px;
+  /* do not increase min-width as some may use split screens */
+  min-width: 800px;
+  color: #999;
+}
+
+h1 {
+  font-size: 24px;
+  color: black;
+}
+
+h2 {
+  font-size: 16px;
+  color: black;
+}
+
+p {
+  color: black;
+}
+
+a {
+  color: #999;
+}
+
+table {
+  border-collapse: collapse;
+}
+
+/******************************
+ * SUMMARY INFORMATION
+ ******************************/
+#environment td {
+  padding: 5px;
+  border: 1px solid #E6E6E6;
+}
+#environment tr:nth-child(odd) {
+  background-color: #f6f6f6;
+}
+
+/******************************
+ * TEST RESULT COLORS
+ ******************************/
+span.passed,
+.passed .col-result {
+  color: green;
+}
+
+span.skipped,
+span.xfailed,
+span.rerun,
+.skipped .col-result,
+.xfailed .col-result,
+.rerun .col-result {
+  color: orange;
+}
+
+span.error,
+span.failed,
+span.xpassed,
+.error .col-result,
+.failed .col-result,
+.xpassed .col-result {
+  color: red;
+}
+
+/******************************
+ * RESULTS TABLE
+ *
+ * 1. Table Layout
+ * 2. Extra
+ * 3. Sorting items
+ *
+ ******************************/
+/*------------------
+ * 1. Table Layout
+ *------------------*/
+#results-table {
+  border: 1px solid #e6e6e6;
+  color: #999;
+  font-size: 12px;
+  width: 100%;
+}
+#results-table th,
+#results-table td {
+  padding: 5px;
+  border: 1px solid #E6E6E6;
+  text-align: left;
+}
+#results-table th {
+  font-weight: bold;
+}
+
+/*------------------
+ * 2. Extra
+ *------------------*/
+.log {
+  background-color: #e6e6e6;
+  border: 1px solid #e6e6e6;
+  color: black;
+  display: block;
+  font-family: "Courier New", Courier, monospace;
+  height: 230px;
+  overflow-y: scroll;
+  padding: 5px;
+  white-space: pre-wrap;
+}
+.log:only-child {
+  height: inherit;
+}
+
+div.image {
+  border: 1px solid #e6e6e6;
+  float: right;
+  height: 240px;
+  margin-left: 5px;
+  overflow: hidden;
+  width: 320px;
+}
+div.image img {
+  width: 320px;
+}
+
+div.video {
+  border: 1px solid #e6e6e6;
+  float: right;
+  height: 240px;
+  margin-left: 5px;
+  overflow: hidden;
+  width: 320px;
+}
+div.video video {
+  overflow: hidden;
+  width: 320px;
+  height: 240px;
+}
+
+.collapsed {
+  display: none;
+}
+
+.expander::after {
+  content: " (show details)";
+  color: #BBB;
+  font-style: italic;
+  cursor: pointer;
+}
+
+.collapser::after {
+  content: " (hide details)";
+  color: #BBB;
+  font-style: italic;
+  cursor: pointer;
+}
+
+/*------------------
+ * 3. Sorting items
+ *------------------*/
+.sortable {
+  cursor: pointer;
+}
+
+.sort-icon {
+  font-size: 0px;
+  float: left;
+  margin-right: 5px;
+  margin-top: 5px;
+  /*triangle*/
+  width: 0;
+  height: 0;
+  border-left: 8px solid transparent;
+  border-right: 8px solid transparent;
+}
+.inactive .sort-icon {
+  /*finish triangle*/
+  border-top: 8px solid #E6E6E6;
+}
+.asc.active .sort-icon {
+  /*finish triangle*/
+  border-bottom: 8px solid #999;
+}
+.desc.active .sort-icon {
+  /*finish triangle*/
+  border-top: 8px solid #999;
+}
+</style></head>
+  <body onLoad="init()">
+    <script>/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this file,
+ * You can obtain one at http://mozilla.org/MPL/2.0/. */
+
+
+function toArray(iter) {
+    if (iter === null) {
+        return null;
+    }
+    return Array.prototype.slice.call(iter);
+}
+
+function find(selector, elem) { // eslint-disable-line no-redeclare
+    if (!elem) {
+        elem = document;
+    }
+    return elem.querySelector(selector);
+}
+
+function findAll(selector, elem) {
+    if (!elem) {
+        elem = document;
+    }
+    return toArray(elem.querySelectorAll(selector));
+}
+
+function sortColumn(elem) {
+    toggleSortStates(elem);
+    const colIndex = toArray(elem.parentNode.childNodes).indexOf(elem);
+    let key;
+    if (elem.classList.contains('result')) {
+        key = keyResult;
+    } else if (elem.classList.contains('links')) {
+        key = keyLink;
+    } else {
+        key = keyAlpha;
+    }
+    sortTable(elem, key(colIndex));
+}
+
+function showAllExtras() { // eslint-disable-line no-unused-vars
+    findAll('.col-result').forEach(showExtras);
+}
+
+function hideAllExtras() { // eslint-disable-line no-unused-vars
+    findAll('.col-result').forEach(hideExtras);
+}
+
+function showExtras(colresultElem) {
+    const extras = colresultElem.parentNode.nextElementSibling;
+    const expandcollapse = colresultElem.firstElementChild;
+    extras.classList.remove('collapsed');
+    expandcollapse.classList.remove('expander');
+    expandcollapse.classList.add('collapser');
+}
+
+function hideExtras(colresultElem) {
+    const extras = colresultElem.parentNode.nextElementSibling;
+    const expandcollapse = colresultElem.firstElementChild;
+    extras.classList.add('collapsed');
+    expandcollapse.classList.remove('collapser');
+    expandcollapse.classList.add('expander');
+}
+
+function showFilters() {
+    let visibleString = getQueryParameter('visible') || 'all';
+    visibleString = visibleString.toLowerCase();
+    const checkedItems = visibleString.split(',');
+
+    const filterItems = document.getElementsByClassName('filter');
+    for (let i = 0; i < filterItems.length; i++) {
+        filterItems[i].hidden = false;
+
+        if (visibleString != 'all') {
+            filterItems[i].checked = checkedItems.includes(filterItems[i].getAttribute('data-test-result'));
+            filterTable(filterItems[i]);
+        }
+    }
+}
+
+function addCollapse() {
+    // Add links for show/hide all
+    const resulttable = find('table#results-table');
+    const showhideall = document.createElement('p');
+    showhideall.innerHTML = '<a href="javascript:showAllExtras()">Show all details</a> / ' +
+                            '<a href="javascript:hideAllExtras()">Hide all details</a>';
+    resulttable.parentElement.insertBefore(showhideall, resulttable);
+
+    // Add show/hide link to each result
+    findAll('.col-result').forEach(function(elem) {
+        const collapsed = getQueryParameter('collapsed') || 'Passed';
+        const extras = elem.parentNode.nextElementSibling;
+        const expandcollapse = document.createElement('span');
+        if (extras.classList.contains('collapsed')) {
+            expandcollapse.classList.add('expander');
+        } else if (collapsed.includes(elem.innerHTML)) {
+            extras.classList.add('collapsed');
+            expandcollapse.classList.add('expander');
+        } else {
+            expandcollapse.classList.add('collapser');
+        }
+        elem.appendChild(expandcollapse);
+
+        elem.addEventListener('click', function(event) {
+            if (event.currentTarget.parentNode.nextElementSibling.classList.contains('collapsed')) {
+                showExtras(event.currentTarget);
+            } else {
+                hideExtras(event.currentTarget);
+            }
+        });
+    });
+}
+
+function getQueryParameter(name) {
+    const match = RegExp('[?&]' + name + '=([^&]*)').exec(window.location.search);
+    return match && decodeURIComponent(match[1].replace(/\+/g, ' '));
+}
+
+function init () { // eslint-disable-line no-unused-vars
+    resetSortHeaders();
+
+    addCollapse();
+
+    showFilters();
+
+    sortColumn(find('.initial-sort'));
+
+    findAll('.sortable').forEach(function(elem) {
+        elem.addEventListener('click',
+            function() {
+                sortColumn(elem);
+            }, false);
+    });
+}
+
+function sortTable(clicked, keyFunc) {
+    const rows = findAll('.results-table-row');
+    const reversed = !clicked.classList.contains('asc');
+    const sortedRows = sort(rows, keyFunc, reversed);
+    /* Whole table is removed here because browsers acts much slower
+     * when appending existing elements.
+     */
+    const thead = document.getElementById('results-table-head');
+    document.getElementById('results-table').remove();
+    const parent = document.createElement('table');
+    parent.id = 'results-table';
+    parent.appendChild(thead);
+    sortedRows.forEach(function(elem) {
+        parent.appendChild(elem);
+    });
+    document.getElementsByTagName('BODY')[0].appendChild(parent);
+}
+
+function sort(items, keyFunc, reversed) {
+    const sortArray = items.map(function(item, i) {
+        return [keyFunc(item), i];
+    });
+
+    sortArray.sort(function(a, b) {
+        const keyA = a[0];
+        const keyB = b[0];
+
+        if (keyA == keyB) return 0;
+
+        if (reversed) {
+            return keyA < keyB ? 1 : -1;
+        } else {
+            return keyA > keyB ? 1 : -1;
+        }
+    });
+
+    return sortArray.map(function(item) {
+        const index = item[1];
+        return items[index];
+    });
+}
+
+function keyAlpha(colIndex) {
+    return function(elem) {
+        return elem.childNodes[1].childNodes[colIndex].firstChild.data.toLowerCase();
+    };
+}
+
+function keyLink(colIndex) {
+    return function(elem) {
+        const dataCell = elem.childNodes[1].childNodes[colIndex].firstChild;
+        return dataCell == null ? '' : dataCell.innerText.toLowerCase();
+    };
+}
+
+function keyResult(colIndex) {
+    return function(elem) {
+        const strings = ['Error', 'Failed', 'Rerun', 'XFailed', 'XPassed',
+            'Skipped', 'Passed'];
+        return strings.indexOf(elem.childNodes[1].childNodes[colIndex].firstChild.data);
+    };
+}
+
+function resetSortHeaders() {
+    findAll('.sort-icon').forEach(function(elem) {
+        elem.parentNode.removeChild(elem);
+    });
+    findAll('.sortable').forEach(function(elem) {
+        const icon = document.createElement('div');
+        icon.className = 'sort-icon';
+        icon.textContent = 'vvv';
+        elem.insertBefore(icon, elem.firstChild);
+        elem.classList.remove('desc', 'active');
+        elem.classList.add('asc', 'inactive');
+    });
+}
+
+function toggleSortStates(elem) {
+    //if active, toggle between asc and desc
+    if (elem.classList.contains('active')) {
+        elem.classList.toggle('asc');
+        elem.classList.toggle('desc');
+    }
+
+    //if inactive, reset all other functions and add ascending active
+    if (elem.classList.contains('inactive')) {
+        resetSortHeaders();
+        elem.classList.remove('inactive');
+        elem.classList.add('active');
+    }
+}
+
+function isAllRowsHidden(value) {
+    return value.hidden == false;
+}
+
+function filterTable(elem) { // eslint-disable-line no-unused-vars
+    const outcomeAtt = 'data-test-result';
+    const outcome = elem.getAttribute(outcomeAtt);
+    const classOutcome = outcome + ' results-table-row';
+    const outcomeRows = document.getElementsByClassName(classOutcome);
+
+    for(let i = 0; i < outcomeRows.length; i++){
+        outcomeRows[i].hidden = !elem.checked;
+    }
+
+    const rows = findAll('.results-table-row').filter(isAllRowsHidden);
+    const allRowsHidden = rows.length == 0 ? true : false;
+    const notFoundMessage = document.getElementById('not-found-message');
+    notFoundMessage.hidden = !allRowsHidden;
+}
+</script>
+    <h1>report.html</h1>
+    <p>Report generated on 06-Jul-2023 at 17:14:59 by <a href="https://pypi.python.org/pypi/pytest-html">pytest-html</a> v3.2.0</p>
+    <h2>Summary</h2>
+    <p>4 tests ran in 108.44 seconds. </p>
+    <p class="filter" hidden="true">(Un)check the boxes to filter the results.</p><input checked="true" class="filter" data-test-result="passed" disabled="true" hidden="true" name="filter_checkbox" onChange="filterTable(this)" type="checkbox"/><span class="passed">0 passed</span>, <input checked="true" class="filter" data-test-result="skipped" disabled="true" hidden="true" name="filter_checkbox" onChange="filterTable(this)" type="checkbox"/><span class="skipped">0 skipped</span>, <input checked="true" class="filter" data-test-result="failed" hidden="true" name="filter_checkbox" onChange="filterTable(this)" type="checkbox"/><span class="failed">4 failed</span>, <input checked="true" class="filter" data-test-result="error" disabled="true" hidden="true" name="filter_checkbox" onChange="filterTable(this)" type="checkbox"/><span class="error">0 errors</span>, <input checked="true" class="filter" data-test-result="xfailed" disabled="true" hidden="true" name="filter_checkbox" onChange="filterTable(this)" type="checkbox"/><span class="xfailed">0 expected failures</span>, <input checked="true" class="filter" data-test-result="xpassed" disabled="true" hidden="true" name="filter_checkbox" onChange="filterTable(this)" type="checkbox"/><span class="xpassed">0 unexpected passes</span>
+    <h2>Results</h2>
+    <table id="results-table">
+      <thead id="results-table-head">
+        <tr>
+          <th class="sortable result initial-sort" col="result">Result</th>
+          <th class="sortable" col="name">Test</th>
+          <th class="sortable" col="duration">Duration</th>
+          <th class="sortable links" col="links">Links</th></tr>
+        <tr hidden="true" id="not-found-message">
+          <th colspan="4">No results found. Try to check the filters</th></tr></thead>
+      <tbody class="failed results-table-row">
+        <tr>
+          <td class="col-result">Failed</td>
+          <td class="col-name">test_cases/test_submit_order.py::Test_submit_order::test_submit_xinan_order</td>
+          <td class="col-duration">19.17</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log">self = &lt;test_cases.test_submit_order.Test_submit_order object at 0x000001E47E0315B0&gt;<br/><br/>    def test_submit_xinan_order(self):<br/>&gt;       flag = new_order.new_order(self.user_account, self.user_password, self.system_name, self.system_env,self.xinan_data_path)<br/><br/>test_cases\test_submit_order.py:39: <br/>_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ <br/><br/>user_account = &#x27;1039310&#x27;, user_password = &#x27;Ofatest2023!&#x27;, system_name = &#x27;金元宝&#x27;, system_env = &#x27;dev&#x27;, data_path = &#x27;data/鑫安.csv&#x27;<br/><br/>    def new_order(user_account,user_password,system_name,system_env,data_path):<br/>        # 获取测试的订单数据<br/>        data_orders = get_data.get_orders(data_path)<br/>        print(data_orders)<br/>    <br/>        # 登录中金应用云系统<br/>        driver = login_cicc_cloud(user_account, user_password)<br/>        driver.maximize_window()<br/>    <br/>        # # 设置最长等待时间15秒<br/>        # driver.implicitly_wait(15)<br/>    <br/>        # 选择要使用的系统与环境并进入<br/>        print(&#x27;尝试进入所选系统&#x27;)<br/>        driver, alert_text = system_select(driver, system_name, system_env)<br/>        print(&#x27;尝试进入所选系统的结果是&#x27; + alert_text)<br/>        assert alert_text == &#x27;OK&#x27;<br/>    <br/>        # 选择侧边栏中“订单管理”菜单<br/>        menu_select_1(driver, &quot;订单管理&quot;)<br/>    <br/>        # 点击“新建订单”<br/>        print(&#x27;尝试进入新建订单页面&#x27;)<br/>        alert_text = click_new_order(driver)<br/>        print(&#x27;尝试进入新建订单页面的结果是&#x27; + alert_text)<br/>&gt;       assert alert_text == &#x27;&#x27; or alert_text == &#x27;OK&#x27;<br/><span class="error">E       AssertionError</span><br/><br/>new_order.py:40: AssertionError<br/> -----------------------------Captured stdout setup------------------------------ <br/>
+ *** 初始化-模块 ***
+<br/> ------------------------------Captured stdout call------------------------------ <br/>          销售人员  代码  风险等级  备注 业务类型  ... 销售省份 地区/营业部(仅供参考)   销售部门 IC联系人  邮箱
+0  李辛羽、陈安哲、周俊龙 NaN   NaN NaN   募集  ...  NaN          NaN  固定收益部   NaN NaN
+
+[1 rows x 26 columns]
+
+一键登录
+账号登录
+账号登录
+登陆后获取的cookie [{&#x27;domain&#x27;: &#x27;eappuat.cicc.group&#x27;, &#x27;httpOnly&#x27;: False, &#x27;name&#x27;: &#x27;org.springframework.web.servlet.i18n.CookieLocaleResolver.LOCALE&#x27;, &#x27;path&#x27;: &#x27;/&#x27;, &#x27;sameSite&#x27;: &#x27;None&#x27;, &#x27;secure&#x27;: True, &#x27;value&#x27;: &#x27;und&#x27;}, {&#x27;domain&#x27;: &#x27;eappuat.cicc.group&#x27;, &#x27;httpOnly&#x27;: True, &#x27;name&#x27;: &#x27;GWSID&#x27;, &#x27;path&#x27;: &#x27;/&#x27;, &#x27;sameSite&#x27;: &#x27;None&#x27;, &#x27;secure&#x27;: True, &#x27;value&#x27;: &#x27;s%3A4nNszhOIrrKPTQESUiJLK_o6f-hlRt7B.CjGJ692JvsTALu0w62Rw%2BGptcgbsOJyXkjeKFPCAiE4&#x27;}]
+尝试进入所选系统
+尝试进入所选系统的结果是OK
+尝试进入新建订单页面
+新建订单
+尝试进入新建订单页面的结果是Request failed with status code 502
+<br/></div></td></tr></tbody>
+      <tbody class="failed results-table-row">
+        <tr>
+          <td class="col-result">Failed</td>
+          <td class="col-name">test_cases/test_submit_order.py::Test_submit_order::test_submit_xintou_order</td>
+          <td class="col-duration">48.90</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log">self = &lt;test_cases.test_submit_order.Test_submit_order object at 0x000001E47E031EE0&gt;<br/><br/>    def test_submit_xintou_order(self):<br/>&gt;       flag = new_order.new_order(self.user_account, self.user_password, self.system_name, self.system_env,<br/>                                   self.xintou_data_path)<br/><br/>test_cases\test_submit_order.py:44: <br/>_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ <br/>new_order.py:54: in new_order<br/>    booking_order.fill_order()<br/>series_project\xintou.py:27: in fill_order<br/>    self.fill_client_price()<br/>series_project\xintou.py:35: in fill_client_price<br/>    element_tool.fill_inputbox(client_price, element_tool.get_element(self.driver, &quot;对客价&quot;))<br/>element_tool.py:11: in get_element<br/>    parent_element = driver.find_element(By.XPATH,&quot;//label[@class = &#x27;el-form-item__label&#x27;][text()=&#x27;&quot; + label + &quot;&#x27;]/..&quot;)<br/>D:\tools\anaconda\envs\page-test\lib\site-packages\selenium\webdriver\remote\webdriver.py:831: in find_element<br/>    return self.execute(Command.FIND_ELEMENT, {&quot;using&quot;: by, &quot;value&quot;: value})[&quot;value&quot;]<br/>D:\tools\anaconda\envs\page-test\lib\site-packages\selenium\webdriver\remote\webdriver.py:440: in execute<br/>    self.error_handler.check_response(response)<br/>_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ <br/><br/>self = &lt;selenium.webdriver.remote.errorhandler.ErrorHandler object at 0x000001E47E0C49A0&gt;<br/>response = {&#x27;status&#x27;: 404, &#x27;value&#x27;: &#x27;{&quot;value&quot;:{&quot;error&quot;:&quot;no such element&quot;,&quot;message&quot;:&quot;no such element: Unable to locate element: {\...\n\\tRtlGetAppContainerNamedObjectPath [0x77147B6E+286]\\n\\tRtlGetAppContainerNamedObjectPath [0x77147B3E+238]\\n&quot;}}&#x27;}<br/><br/>    def check_response(self, response: Dict[str, Any]) -&gt; None:<br/>        &quot;&quot;&quot;Checks that a JSON response from the WebDriver does not have an<br/>        error.<br/>    <br/>        :Args:<br/>         - response - The JSON response from the WebDriver server as a dictionary<br/>           object.<br/>    <br/>        :Raises: If the response contains an error message.<br/>        &quot;&quot;&quot;<br/>        status = response.get(&quot;status&quot;, None)<br/>        if not status or status == ErrorCode.SUCCESS:<br/>            return<br/>        value = None<br/>        message = response.get(&quot;message&quot;, &quot;&quot;)<br/>        screen: str = response.get(&quot;screen&quot;, &quot;&quot;)<br/>        stacktrace = None<br/>        if isinstance(status, int):<br/>            value_json = response.get(&quot;value&quot;, None)<br/>            if value_json and isinstance(value_json, str):<br/>                import json<br/>    <br/>                try:<br/>                    value = json.loads(value_json)<br/>                    if len(value) == 1:<br/>                        value = value[&quot;value&quot;]<br/>                    status = value.get(&quot;error&quot;, None)<br/>                    if not status:<br/>                        status = value.get(&quot;status&quot;, ErrorCode.UNKNOWN_ERROR)<br/>                        message = value.get(&quot;value&quot;) or value.get(&quot;message&quot;)<br/>                        if not isinstance(message, str):<br/>                            value = message<br/>                            message = message.get(&quot;message&quot;)<br/>                    else:<br/>                        message = value.get(&quot;message&quot;, None)<br/>                except ValueError:<br/>                    pass<br/>    <br/>        exception_class: Type[WebDriverException]<br/>        if status in ErrorCode.NO_SUCH_ELEMENT:<br/>            exception_class = NoSuchElementException<br/>        elif status in ErrorCode.NO_SUCH_FRAME:<br/>            exception_class = NoSuchFrameException<br/>        elif status in ErrorCode.NO_SUCH_SHADOW_ROOT:<br/>            exception_class = NoSuchShadowRootException<br/>        elif status in ErrorCode.NO_SUCH_WINDOW:<br/>            exception_class = NoSuchWindowException<br/>        elif status in ErrorCode.STALE_ELEMENT_REFERENCE:<br/>            exception_class = StaleElementReferenceException<br/>        elif status in ErrorCode.ELEMENT_NOT_VISIBLE:<br/>            exception_class = ElementNotVisibleException<br/>        elif status in ErrorCode.INVALID_ELEMENT_STATE:<br/>            exception_class = InvalidElementStateException<br/>        elif (<br/>            status in ErrorCode.INVALID_SELECTOR<br/>            or status in ErrorCode.INVALID_XPATH_SELECTOR<br/>            or status in ErrorCode.INVALID_XPATH_SELECTOR_RETURN_TYPER<br/>        ):<br/>            exception_class = InvalidSelectorException<br/>        elif status in ErrorCode.ELEMENT_IS_NOT_SELECTABLE:<br/>            exception_class = ElementNotSelectableException<br/>        elif status in ErrorCode.ELEMENT_NOT_INTERACTABLE:<br/>            exception_class = ElementNotInteractableException<br/>        elif status in ErrorCode.INVALID_COOKIE_DOMAIN:<br/>            exception_class = InvalidCookieDomainException<br/>        elif status in ErrorCode.UNABLE_TO_SET_COOKIE:<br/>            exception_class = UnableToSetCookieException<br/>        elif status in ErrorCode.TIMEOUT:<br/>            exception_class = TimeoutException<br/>        elif status in ErrorCode.SCRIPT_TIMEOUT:<br/>            exception_class = TimeoutException<br/>        elif status in ErrorCode.UNKNOWN_ERROR:<br/>            exception_class = WebDriverException<br/>        elif status in ErrorCode.UNEXPECTED_ALERT_OPEN:<br/>            exception_class = UnexpectedAlertPresentException<br/>        elif status in ErrorCode.NO_ALERT_OPEN:<br/>            exception_class = NoAlertPresentException<br/>        elif status in ErrorCode.IME_NOT_AVAILABLE:<br/>            exception_class = ImeNotAvailableException<br/>        elif status in ErrorCode.IME_ENGINE_ACTIVATION_FAILED:<br/>            exception_class = ImeActivationFailedException<br/>        elif status in ErrorCode.MOVE_TARGET_OUT_OF_BOUNDS:<br/>            exception_class = MoveTargetOutOfBoundsException<br/>        elif status in ErrorCode.JAVASCRIPT_ERROR:<br/>            exception_class = JavascriptException<br/>        elif status in ErrorCode.SESSION_NOT_CREATED:<br/>            exception_class = SessionNotCreatedException<br/>        elif status in ErrorCode.INVALID_ARGUMENT:<br/>            exception_class = InvalidArgumentException<br/>        elif status in ErrorCode.NO_SUCH_COOKIE:<br/>            exception_class = NoSuchCookieException<br/>        elif status in ErrorCode.UNABLE_TO_CAPTURE_SCREEN:<br/>            exception_class = ScreenshotException<br/>        elif status in ErrorCode.ELEMENT_CLICK_INTERCEPTED:<br/>            exception_class = ElementClickInterceptedException<br/>        elif status in ErrorCode.INSECURE_CERTIFICATE:<br/>            exception_class = InsecureCertificateException<br/>        elif status in ErrorCode.INVALID_COORDINATES:<br/>            exception_class = InvalidCoordinatesException<br/>        elif status in ErrorCode.INVALID_SESSION_ID:<br/>            exception_class = InvalidSessionIdException<br/>        elif status in ErrorCode.UNKNOWN_METHOD:<br/>            exception_class = UnknownMethodException<br/>        else:<br/>            exception_class = WebDriverException<br/>        if not value:<br/>            value = response[&quot;value&quot;]<br/>        if isinstance(value, str):<br/>            raise exception_class(value)<br/>        if message == &quot;&quot; and &quot;message&quot; in value:<br/>            message = value[&quot;message&quot;]<br/>    <br/>        screen = None  # type: ignore[assignment]<br/>        if &quot;screen&quot; in value:<br/>            screen = value[&quot;screen&quot;]<br/>    <br/>        stacktrace = None<br/>        st_value = value.get(&quot;stackTrace&quot;) or value.get(&quot;stacktrace&quot;)<br/>        if st_value:<br/>            if isinstance(st_value, str):<br/>                stacktrace = st_value.split(&quot;\n&quot;)<br/>            else:<br/>                stacktrace = []<br/>                try:<br/>                    for frame in st_value:<br/>                        line = frame.get(&quot;lineNumber&quot;, &quot;&quot;)<br/>                        file = frame.get(&quot;fileName&quot;, &quot;&lt;anonymous&gt;&quot;)<br/>                        if line:<br/>                            file = f&quot;{file}:{line}&quot;<br/>                        meth = frame.get(&quot;methodName&quot;, &quot;&lt;anonymous&gt;&quot;)<br/>                        if &quot;className&quot; in frame:<br/>                            meth = f&quot;{frame[&#x27;className&#x27;]}.{meth}&quot;<br/>                        msg = &quot;    at %s (%s)&quot;<br/>                        msg = msg % (meth, file)<br/>                        stacktrace.append(msg)<br/>                except TypeError:<br/>                    pass<br/>        if exception_class == UnexpectedAlertPresentException:<br/>            alert_text = None<br/>            if &quot;data&quot; in value:<br/>                alert_text = value[&quot;data&quot;].get(&quot;text&quot;)<br/>            elif &quot;alert&quot; in value:<br/>                alert_text = value[&quot;alert&quot;].get(&quot;text&quot;)<br/>            raise exception_class(message, screen, stacktrace, alert_text)  # type: ignore[call-arg]  # mypy is not smart enough here<br/>&gt;       raise exception_class(message, screen, stacktrace)<br/><span class="error">E       selenium.common.exceptions.NoSuchElementException: Message: no such element: Unable to locate element: {&quot;method&quot;:&quot;xpath&quot;,&quot;selector&quot;:&quot;//label[@class = &#x27;el-form-item__label&#x27;][text()=&#x27;对客价&#x27;]/..&quot;}</span><br/><span class="error">E         (Session info: chrome=114.0.5735.199)</span><br/><span class="error">E       Stacktrace:</span><br/><span class="error">E       Backtrace:</span><br/><span class="error">E       	GetHandleVerifier [0x004CA813+48355]</span><br/><span class="error">E       	(No symbol) [0x0045C4B1]</span><br/><span class="error">E       	(No symbol) [0x00365358]</span><br/><span class="error">E       	(No symbol) [0x003909A5]</span><br/><span class="error">E       	(No symbol) [0x00390B3B]</span><br/><span class="error">E       	(No symbol) [0x003BE232]</span><br/><span class="error">E       	(No symbol) [0x003AA784]</span><br/><span class="error">E       	(No symbol) [0x003BC922]</span><br/><span class="error">E       	(No symbol) [0x003AA536]</span><br/><span class="error">E       	(No symbol) [0x003882DC]</span><br/><span class="error">E       	(No symbol) [0x003893DD]</span><br/><span class="error">E       	GetHandleVerifier [0x0072AABD+2539405]</span><br/><span class="error">E       	GetHandleVerifier [0x0076A78F+2800735]</span><br/><span class="error">E       	GetHandleVerifier [0x0076456C+2775612]</span><br/><span class="error">E       	GetHandleVerifier [0x005551E0+616112]</span><br/><span class="error">E       	(No symbol) [0x00465F8C]</span><br/><span class="error">E       	(No symbol) [0x00462328]</span><br/><span class="error">E       	(No symbol) [0x0046240B]</span><br/><span class="error">E       	(No symbol) [0x00454FF7]</span><br/><span class="error">E       	BaseThreadInitThunk [0x76420099+25]</span><br/><span class="error">E       	RtlGetAppContainerNamedObjectPath [0x77147B6E+286]</span><br/><span class="error">E       	RtlGetAppContainerNamedObjectPath [0x77147B3E+238]</span><br/><br/>D:\tools\anaconda\envs\page-test\lib\site-packages\selenium\webdriver\remote\errorhandler.py:245: NoSuchElementException<br/> ------------------------------Captured stdout call------------------------------ <br/>          销售人员  代码  风险等级  备注 业务类型  ... 销售省份 地区/营业部(仅供参考)   销售部门 IC联系人  邮箱
+0  李辛羽、陈安哲、周俊龙 NaN   NaN NaN   募集  ...  NaN          NaN  固定收益部   NaN NaN
+
+[1 rows x 26 columns]
+
+一键登录
+账号登录
+账号登录
+登陆后获取的cookie [{&#x27;domain&#x27;: &#x27;eappuat.cicc.group&#x27;, &#x27;httpOnly&#x27;: False, &#x27;name&#x27;: &#x27;org.springframework.web.servlet.i18n.CookieLocaleResolver.LOCALE&#x27;, &#x27;path&#x27;: &#x27;/&#x27;, &#x27;sameSite&#x27;: &#x27;None&#x27;, &#x27;secure&#x27;: True, &#x27;value&#x27;: &#x27;und&#x27;}, {&#x27;domain&#x27;: &#x27;eappuat.cicc.group&#x27;, &#x27;httpOnly&#x27;: True, &#x27;name&#x27;: &#x27;GWSID&#x27;, &#x27;path&#x27;: &#x27;/&#x27;, &#x27;sameSite&#x27;: &#x27;None&#x27;, &#x27;secure&#x27;: True, &#x27;value&#x27;: &#x27;s%3AIJvDDLzrhiAxLgzFsnDv0mbd_Cv82OCX.sqlQFA1LM8s%2BWHyvJ%2FQ%2Fs7TGupKhrpK4ZOGq%2BIDOyPQ&#x27;}]
+尝试进入所选系统
+尝试进入所选系统的结果是OK
+尝试进入新建订单页面
+新建订单
+尝试进入新建订单页面的结果是
+<br/></div></td></tr></tbody>
+      <tbody class="failed results-table-row">
+        <tr>
+          <td class="col-result">Failed</td>
+          <td class="col-name">test_cases/test_submit_order.py::Test_submit_order::test_submit_changying_order</td>
+          <td class="col-duration">19.26</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log">self = &lt;test_cases.test_submit_order.Test_submit_order object at 0x000001E47E031BE0&gt;<br/><br/>    def test_submit_changying_order(self):<br/>&gt;       flag = new_order.new_order(self.user_account, self.user_password, self.system_name, self.system_env,<br/>                                   self.changying_data_path)<br/><br/>test_cases\test_submit_order.py:50: <br/>_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ <br/><br/>user_account = &#x27;1039310&#x27;, user_password = &#x27;Ofatest2023!&#x27;, system_name = &#x27;金元宝&#x27;, system_env = &#x27;dev&#x27;, data_path = &#x27;data/长赢.csv&#x27;<br/><br/>    def new_order(user_account,user_password,system_name,system_env,data_path):<br/>        # 获取测试的订单数据<br/>        data_orders = get_data.get_orders(data_path)<br/>        print(data_orders)<br/>    <br/>        # 登录中金应用云系统<br/>        driver = login_cicc_cloud(user_account, user_password)<br/>        driver.maximize_window()<br/>    <br/>        # # 设置最长等待时间15秒<br/>        # driver.implicitly_wait(15)<br/>    <br/>        # 选择要使用的系统与环境并进入<br/>        print(&#x27;尝试进入所选系统&#x27;)<br/>        driver, alert_text = system_select(driver, system_name, system_env)<br/>        print(&#x27;尝试进入所选系统的结果是&#x27; + alert_text)<br/>        assert alert_text == &#x27;OK&#x27;<br/>    <br/>        # 选择侧边栏中“订单管理”菜单<br/>        menu_select_1(driver, &quot;订单管理&quot;)<br/>    <br/>        # 点击“新建订单”<br/>        print(&#x27;尝试进入新建订单页面&#x27;)<br/>        alert_text = click_new_order(driver)<br/>        print(&#x27;尝试进入新建订单页面的结果是&#x27; + alert_text)<br/>&gt;       assert alert_text == &#x27;&#x27; or alert_text == &#x27;OK&#x27;<br/><span class="error">E       AssertionError</span><br/><br/>new_order.py:40: AssertionError<br/> ------------------------------Captured stdout call------------------------------ <br/>          销售人员  代码  风险等级  备注 业务类型  ... 销售省份 地区/营业部(仅供参考)   销售部门 IC联系人  邮箱
+0  李辛羽、陈安哲、周俊龙 NaN   NaN NaN   募集  ...  NaN          NaN  固定收益部   NaN NaN
+
+[1 rows x 43 columns]
+
+一键登录
+账号登录
+账号登录
+登陆后获取的cookie [{&#x27;domain&#x27;: &#x27;eappuat.cicc.group&#x27;, &#x27;httpOnly&#x27;: False, &#x27;name&#x27;: &#x27;org.springframework.web.servlet.i18n.CookieLocaleResolver.LOCALE&#x27;, &#x27;path&#x27;: &#x27;/&#x27;, &#x27;sameSite&#x27;: &#x27;None&#x27;, &#x27;secure&#x27;: True, &#x27;value&#x27;: &#x27;und&#x27;}, {&#x27;domain&#x27;: &#x27;eappuat.cicc.group&#x27;, &#x27;httpOnly&#x27;: True, &#x27;name&#x27;: &#x27;GWSID&#x27;, &#x27;path&#x27;: &#x27;/&#x27;, &#x27;sameSite&#x27;: &#x27;None&#x27;, &#x27;secure&#x27;: True, &#x27;value&#x27;: &#x27;s%3A8H3lESoYE5yCX4157jMBa4_SGJw2akJ1.%2F6t6J%2FGJwcl9xQn%2BGpsYbGEJKgNGwihz5hBKBuIaraA&#x27;}]
+尝试进入所选系统
+尝试进入所选系统的结果是OK
+尝试进入新建订单页面
+新建订单
+尝试进入新建订单页面的结果是Request failed with status code 502
+<br/></div></td></tr></tbody>
+      <tbody class="failed results-table-row">
+        <tr>
+          <td class="col-result">Failed</td>
+          <td class="col-name">test_cases/test_submit_order.py::Test_submit_order::test_submit_ruichi_order</td>
+          <td class="col-duration">19.80</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log">self = &lt;test_cases.test_submit_order.Test_submit_order object at 0x000001E47E031A90&gt;<br/><br/>    def test_submit_ruichi_order(self):<br/>&gt;       flag = new_order.new_order(self.user_account, self.user_password, self.system_name, self.system_env,<br/>                                   self.ruichi_data_path)<br/><br/>test_cases\test_submit_order.py:57: <br/>_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ <br/><br/>user_account = &#x27;1039310&#x27;, user_password = &#x27;Ofatest2023!&#x27;, system_name = &#x27;金元宝&#x27;, system_env = &#x27;dev&#x27;, data_path = &#x27;data/瑞驰.csv&#x27;<br/><br/>    def new_order(user_account,user_password,system_name,system_env,data_path):<br/>        # 获取测试的订单数据<br/>        data_orders = get_data.get_orders(data_path)<br/>        print(data_orders)<br/>    <br/>        # 登录中金应用云系统<br/>        driver = login_cicc_cloud(user_account, user_password)<br/>        driver.maximize_window()<br/>    <br/>        # # 设置最长等待时间15秒<br/>        # driver.implicitly_wait(15)<br/>    <br/>        # 选择要使用的系统与环境并进入<br/>        print(&#x27;尝试进入所选系统&#x27;)<br/>        driver, alert_text = system_select(driver, system_name, system_env)<br/>        print(&#x27;尝试进入所选系统的结果是&#x27; + alert_text)<br/>        assert alert_text == &#x27;OK&#x27;<br/>    <br/>        # 选择侧边栏中“订单管理”菜单<br/>        menu_select_1(driver, &quot;订单管理&quot;)<br/>    <br/>        # 点击“新建订单”<br/>        print(&#x27;尝试进入新建订单页面&#x27;)<br/>        alert_text = click_new_order(driver)<br/>        print(&#x27;尝试进入新建订单页面的结果是&#x27; + alert_text)<br/>&gt;       assert alert_text == &#x27;&#x27; or alert_text == &#x27;OK&#x27;<br/><span class="error">E       AssertionError</span><br/><br/>new_order.py:40: AssertionError<br/> ------------------------------Captured stdout call------------------------------ <br/>          销售人员  代码  风险等级  备注 业务类型  ... 销售省份 地区/营业部(仅供参考)   销售部门 IC联系人  邮箱
+0  李辛羽、陈安哲、周俊龙 NaN   NaN NaN   募集  ...  NaN          NaN  固定收益部   NaN NaN
+
+[1 rows x 32 columns]
+
+一键登录
+账号登录
+账号登录
+登陆后获取的cookie [{&#x27;domain&#x27;: &#x27;eappuat.cicc.group&#x27;, &#x27;httpOnly&#x27;: False, &#x27;name&#x27;: &#x27;org.springframework.web.servlet.i18n.CookieLocaleResolver.LOCALE&#x27;, &#x27;path&#x27;: &#x27;/&#x27;, &#x27;sameSite&#x27;: &#x27;None&#x27;, &#x27;secure&#x27;: True, &#x27;value&#x27;: &#x27;und&#x27;}, {&#x27;domain&#x27;: &#x27;eappuat.cicc.group&#x27;, &#x27;httpOnly&#x27;: True, &#x27;name&#x27;: &#x27;GWSID&#x27;, &#x27;path&#x27;: &#x27;/&#x27;, &#x27;sameSite&#x27;: &#x27;None&#x27;, &#x27;secure&#x27;: True, &#x27;value&#x27;: &#x27;s%3Akqx1jG4AAL1Seq042TgjXEszMGmhYZIC.a%2BkUnUKdO2ipABHsWa6Zgx0Az7u0FnITWYOtb9Q4A4M&#x27;}]
+尝试进入所选系统
+尝试进入所选系统的结果是OK
+尝试进入新建订单页面
+新建订单
+尝试进入新建订单页面的结果是Request failed with status code 502
+<br/> ----------------------------Captured stdout teardown---------------------------- <br/>
+ ***   清除-模块 ***
+<br/></div></td></tr></tbody></table></body></html>
