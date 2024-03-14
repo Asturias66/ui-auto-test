@@ -33,7 +33,3 @@ class XinTou(Series):
     def fill_client_price(self):
         client_price = self.order['对客价']
         element_tool.fill_inputbox(client_price, element_tool.get_element(self.driver, "对客价"))
-
-
-
-
